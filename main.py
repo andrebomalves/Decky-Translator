@@ -100,6 +100,8 @@ SENSITIVE_SETTING_KEYS = {
     "google_vision_api_key",
     "google_translate_api_key",
     "gemini_api_key",
+    "online_api_key",
+    "online_endpoint",
 }
 
 
@@ -1193,6 +1195,18 @@ class Plugin:
     _gemini_api_key: str = ""
     _gemini_model: str = "gemini-2.5-flash"
 
+    # TTS Voice Reader (SDD TTS-001)
+    _tts_provider: str = "piper"
+    _tts_ptbr_voice: str = "pt_BR-faber-medium"
+    _tts_speed: float = 1.0
+    _tts_volume: int = 80
+    _tts_auto_read: bool = False
+    _tts_ducking: bool = True
+    _tts_ducking_level: int = 25
+    _online_endpoint: str = ""
+    _online_api_key: str = ""
+    _online_compat: str = "openai"
+
     _has_pngenc = None
     _fallback_dims = None
     _capture_backend = None  # "pipewire" | "spectacle" | "portal" | None
@@ -1488,6 +1502,56 @@ class Plugin:
                         self._provider_manager.resume_ct2_worker()
             elif key == "translation_cache_enabled":
                 self._translation_cache_enabled = bool(value)
+            elif key == "tts_provider":
+                if value not in ("piper", "edge", "omnivoice"):
+                    logger.warning(f"Invalid tts_provider: {value}")
+                    return False
+                self._tts_provider = value
+            elif key == "tts_ptbr_voice":
+                self._tts_ptbr_voice = str(value)
+            elif key == "tts_speed":
+                try:
+                    v = float(value)
+                    v = max(0.5, min(2.0, v))
+                    self._tts_speed = v
+                    value = v
+                except Exception:
+                    logger.warning(f"Invalid tts_speed: {value}")
+                    return False
+            elif key == "tts_volume":
+                try:
+                    v = int(value)
+                    v = max(0, min(100, v))
+                    self._tts_volume = v
+                    value = v
+                except Exception:
+                    logger.warning(f"Invalid tts_volume: {value}")
+                    return False
+            elif key == "tts_auto_read":
+                self._tts_auto_read = bool(value)
+            elif key == "tts_ducking":
+                self._tts_ducking = bool(value)
+            elif key == "tts_ducking_level":
+                try:
+                    v = int(value)
+                    v = max(0, min(100, v))
+                    self._tts_ducking_level = v
+                    value = v
+                except Exception:
+                    logger.warning(f"Invalid tts_ducking_level: {value}")
+                    return False
+            elif key == "online_endpoint":
+                self._online_endpoint = str(value).strip()
+                value = self._online_endpoint
+            elif key == "online_api_key":
+                cleaned = _clean_api_key(str(value)) if isinstance(value, str) else value
+                self._online_api_key = cleaned
+                value = cleaned
+            elif key == "online_compat":
+                if value not in ("openai", "simple"):
+                    logger.warning(f"Invalid online_compat: {value}")
+                    return False
+                self._online_compat = value
             else:
                 logger.warning(f"Unknown setting key: {key}")
 
@@ -1533,6 +1597,16 @@ class Plugin:
                 "allow_label_growth": self._settings.get_setting("allow_label_growth", False),
                 "custom_recognition_settings": self._settings.get_setting("custom_recognition_settings", False),
                 "translation_cache_enabled": self._translation_cache_enabled,
+                "tts_provider": self._settings.get_setting("tts_provider", "piper"),
+                "tts_ptbr_voice": self._settings.get_setting("tts_ptbr_voice", "pt_BR-faber-medium"),
+                "tts_speed": self._settings.get_setting("tts_speed", 1.0),
+                "tts_volume": self._settings.get_setting("tts_volume", 80),
+                "tts_auto_read": self._settings.get_setting("tts_auto_read", False),
+                "tts_ducking": self._settings.get_setting("tts_ducking", True),
+                "tts_ducking_level": self._settings.get_setting("tts_ducking_level", 25),
+                "online_endpoint": self._settings.get_setting("online_endpoint", ""),
+                "online_api_key": self._settings.get_setting("online_api_key", ""),
+                "online_compat": self._settings.get_setting("online_compat", "openai"),
             }
             return settings
         except Exception as e:
@@ -2670,6 +2744,52 @@ class Plugin:
             logger.error(f"Error deleting RapidOCR models: {e}")
             return False
 
+    async def test_tts_voice(self, text: str = "Ola, teste de voz em portugues do Brasil."):
+        """Testa sintese TTS. Stub ate implementacao Piper/Edge/OmniVoice completa (F2/F3)."""
+        try:
+            preview = (text or "").strip()[:400] or "Ola, teste de voz em portugues do Brasil."
+            provider = getattr(self, "_tts_provider", "piper")
+            voice = getattr(self, "_tts_ptbr_voice", "pt_BR-faber-medium")
+            speed = getattr(self, "_tts_speed", 1.0)
+            volume = getattr(self, "_tts_volume", 80)
+            ducking = getattr(self, "_tts_ducking", True)
+            endpoint = getattr(self, "_online_endpoint", "")
+            compat = getattr(self, "_online_compat", "openai")
+            has_key = bool(getattr(self, "_online_api_key", ""))
+            # nunca logar api_key crua
+            logger.info(f"test_tts_voice provider={provider} voice={voice} speed={speed} volume={volume} ducking={ducking} endpoint={_mask_for_log('online_endpoint', endpoint) if endpoint else ''} has_key={has_key} compat={compat} text_len={len(preview)}")
+            if provider in ("edge", "omnivoice"):
+                if provider == "omnivoice" and not endpoint:
+                    return {"ok": False, "error": "Endpoint vazio. Configure a URL do provedor online."}
+                if provider == "omnivoice" and not has_key:
+                    return {"ok": False, "error": "API Key vazia. Configure a chave do provedor online."}
+                # edge/omnivoice ainda sem implementacao real: retorna ok simulado
+                return {"ok": True, "provider": provider, "simulated": True, "text": preview}
+            # piper offline - stub ok (F2 vai implementar piper_provider)
+            return {"ok": True, "provider": provider, "simulated": True, "text": preview}
+        except Exception as e:
+            logger.error(f"test_tts_voice failed: {e}")
+            logger.error(traceback.format_exc())
+            return {"ok": False, "error": str(e)}
+
+    async def get_tts_status(self):
+        try:
+            return {
+                "provider": getattr(self, "_tts_provider", "piper"),
+                "voice": getattr(self, "_tts_ptbr_voice", "pt_BR-faber-medium"),
+                "speed": getattr(self, "_tts_speed", 1.0),
+                "volume": getattr(self, "_tts_volume", 80),
+                "auto_read": getattr(self, "_tts_auto_read", False),
+                "ducking": getattr(self, "_tts_ducking", True),
+                "ducking_level": getattr(self, "_tts_ducking_level", 25),
+                "endpoint_configured": bool(getattr(self, "_online_endpoint", "")),
+                "has_api_key": bool(getattr(self, "_online_api_key", "")),
+                "compat": getattr(self, "_online_compat", "openai"),
+            }
+        except Exception as e:
+            logger.error(f"get_tts_status failed: {e}")
+            return {"error": str(e)}
+
     async def _main(self):
         logger.info("Plugin initialization started")
         try:
@@ -2699,6 +2819,25 @@ class Plugin:
             self._translation_cache_enabled = bool(
                 load_setting("translation_cache_enabled", self._translation_cache_enabled)
             )
+
+            # TTS settings (SDD TTS-001)
+            self._tts_provider = load_setting("tts_provider", self._tts_provider)
+            self._tts_ptbr_voice = load_setting("tts_ptbr_voice", self._tts_ptbr_voice)
+            self._tts_speed = float(load_setting("tts_speed", self._tts_speed))
+            self._tts_volume = int(load_setting("tts_volume", self._tts_volume))
+            self._tts_auto_read = bool(load_setting("tts_auto_read", self._tts_auto_read))
+            self._tts_ducking = bool(load_setting("tts_ducking", self._tts_ducking))
+            self._tts_ducking_level = int(load_setting("tts_ducking_level", self._tts_ducking_level))
+            self._online_endpoint = load_api_key("online_endpoint") if False else load_setting("online_endpoint", self._online_endpoint)
+            # online_api_key needs masking like other api keys
+            _raw_online_key = self._settings.get_setting("online_api_key", "")
+            _cleaned_online = _clean_api_key(_raw_online_key) if isinstance(_raw_online_key, str) else _raw_online_key
+            if _cleaned_online != _raw_online_key:
+                self._settings.set_setting("online_api_key", _cleaned_online)
+            if _cleaned_online:
+                logger.info(f"online_api_key loaded (len={len(_cleaned_online)})")
+            self._online_api_key = _cleaned_online or ""
+            self._online_compat = load_setting("online_compat", self._online_compat)
 
             os.makedirs(self._screenshotPath, exist_ok=True)
 
