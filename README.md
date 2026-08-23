@@ -1,14 +1,16 @@
 <p align="center">
-  <img src="assets/readme-logo.png" alt="Decky Translator" />
+  <img src="assets/readme-logo.png" alt="Decky Translator TTS" />
 </p>
 
-![GitHub Release](https://img.shields.io/github/v/release/cat-in-a-box/Decky-Translator)
-![License](https://img.shields.io/github/license/cat-in-a-box/Decky-Translator?color=green)
-![Build Status](https://img.shields.io/github/actions/workflow/status/cat-in-a-box/Decky-Translator/build.yml)
+![GitHub Release](https://img.shields.io/github/v/release/andrebomalves/Decky-Translator-TTS)
+![License](https://img.shields.io/github/license/andrebomalves/Decky-Translator-TTS?color=green)
+![Build Status](https://img.shields.io/github/actions/workflow/status/andrebomalves/Decky-Translator-TTS/build.yml)
+
+> **Fork de [cat-in-a-box/Decky-Translator](https://github.com/cat-in-a-box/Decky-Translator)** (GPL-3.0) — adiciona leitura em voz alta PT-BR (TTS offline Piper + online Edge/OmniVoice).
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/alexanderdev)
 
-A [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) plugin that lets you translate any text on your Steam Deck screen.
+A [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) plugin that lets you translate any text on your Steam Deck screen — and now **read it aloud in Portuguese (PT-BR)**.
 
 It captures your screen, recognizes text using OCR, translates it and then shows the result with screen overlay.
 
@@ -31,16 +33,16 @@ Might be helpful for learning a new language by playing games or some other purp
 1. Install [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader/tree/main?tab=readme-ov-file#-installation) on your Steam Deck
 2. Press <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/light/qam.svg"><img height="16" alt="QAM" src="assets/icons/dark/qam.svg"></picture> to open the side bar and go to the Decky tab <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/light/plug.svg"><img height="16" alt="Decky" src="assets/icons/dark/plug.svg"></picture>
 3. In the upper right corner press <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/light/store.svg"><img height="16" alt="Store" src="assets/icons/dark/store.svg"></picture> to view all the available plugins
-4. Search for "Decky Translator" and install it
+4. Search for "Decky Translator TTS" and install it
 
 ### Manual Installation
 1. Install [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader/tree/main?tab=readme-ov-file#-installation) on your Steam Deck
-2. [Download](https://github.com/cat-in-a-box/Decky-Translator/releases/latest/download/Decky.Translator.zip) the latest release from the [Releases](https://github.com/cat-in-a-box/decky-translator/releases) page
-3. Upload *Decky.Translator.zip* archive to any directory on your Steam Deck
+2. [Download](https://github.com/andrebomalves/Decky-Translator-TTS/releases/latest) the latest release from the [Releases](https://github.com/andrebomalves/Decky-Translator-TTS/releases) page
+3. Upload the plugin ZIP archive to any directory on your Steam Deck
 4. Press <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/light/qam.svg"><img height="16" alt="QAM" src="assets/icons/dark/qam.svg"></picture>, go to the Decky tab <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/light/plug.svg"><img height="16" alt="Decky" src="assets/icons/dark/plug.svg"></picture> and click <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icons/light/gear.svg"><img height="16" alt="Settings" src="assets/icons/dark/gear.svg"></picture>
 5. Enable "Developer Mode" in General tab
 6. Open the Developer tab
-7. Install Plugin from ZIP file -> "Browse" and then select *Decky.Translator.zip*
+7. Install Plugin from ZIP file -> "Browse" and then select the ZIP
 
 ## How to use it?
 
@@ -56,7 +58,7 @@ Button or Combinations can be configured in the Controls tab
 
 ## How does it do that? 
 
-Decky Translator allows you to choose different Text Recognition and Translation methods - feel free to experiment.
+Decky Translator TTS allows you to choose different Text Recognition and Translation methods - feel free to experiment.
 
 ### Text Recognition (OCR)
 
@@ -117,7 +119,7 @@ For security, you can restrict the API key to only the Vision and Translation AP
 ![API-Key-Restriction](assets/google-cloud-key-4.jpg)
 
 ### Step 5: Add API Key to Plugin
-1. Open the Decky Translator plugin on your Steam Deck
+1. Open the Decky Translator TTS plugin on your Steam Deck
 2. Go to the Translation tab
 3. Select Google Cloud Vision and/or Google Cloud Translation as your providers
 4. Click "Set Key"
@@ -134,7 +136,7 @@ Google Cloud offers a free tier that should be sufficient for personal use:
 - **Vision API**: First 1,000 units/month free
 - **Translation API**: First 500,000 characters/month free
 
-**From my own experience**, even everyday usage of Decky Translator with Google Cloud for both recognition and translation rarely goes beyond their free tier. 
+**From my own experience**, even everyday usage of Decky Translator TTS with Google Cloud for both recognition and translation rarely goes beyond their free tier. 
 Only once I had to pay around 1€/month - and that was during VERY active development and testing phase. 
 
 **But if you want to stay on the safe side anyway** - you could set up a budget limit and notification in [Billing > Budgets & Alerts](https://console.cloud.google.com/billing/budgets)
@@ -169,7 +171,7 @@ Try increasing the "Font Scaling" option in plugin settings
 Double-check that you entered it correctly. If the issue persists, please raise an issue - let's investigate it together
 
 ### I see nothing / Recognition is bad / It does not translate anything
-Try other combination of text recognition and translation methods. If it doesnt solve the problem - please report it here [New Issue](https://github.com/cat-in-a-box/Decky-Translator/issues/new). It will also help if you attach your .log file there
+Try other combination of text recognition and translation methods. If it doesnt solve the problem - please report it here [New Issue](https://github.com/andrebomalves/Decky-Translator-TTS/issues/new). It will also help if you attach your .log file there
 
 ## To-Do
 ### Functional

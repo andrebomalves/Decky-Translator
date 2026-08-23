@@ -1,7 +1,7 @@
-# TASKS — Decky Voice Reader (Fork Decky-Translator + TTS)
+# TASKS — Decky Voice Reader (Fork Decky-Translator-TTS + TTS)
 
 > Branch: `feature/tts-layer` | SDD: `specs/TTS-001.md` | ADRs: `docs/adr/`
-> Repo: https://github.com/andrebomalves/Decky-Translator/tree/feature/tts-layer
+> Repo: https://github.com/andrebomalves/Decky-Translator-TTS/tree/feature/tts-layer
 
 ## F0 — Preparação ✅
 - [x] T0.1 Fork + branch `feature/tts-layer` + pastas specs/docs/py_modules

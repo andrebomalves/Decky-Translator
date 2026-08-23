@@ -56,15 +56,15 @@ def _should_extract_dependencies():
 
 if _should_extract_dependencies():
     try:
-        print(f"[Decky Translator] Extracting dependencies from {DEPENDENCIES_ARCHIVE}...")
+        print(f"[Decky Translator TTS] Extracting dependencies from {DEPENDENCIES_ARCHIVE}...")
         with tarfile.open(DEPENDENCIES_ARCHIVE, "r:gz") as tar:
             tar.extractall(path=BIN_DIR)
         # Create marker file to indicate successful extraction
         with open(EXTRACTION_MARKER, "w") as f:
             f.write(f"Extracted at {datetime.now().isoformat()}\n")
-        print(f"[Decky Translator] Dependencies extracted successfully")
+        print(f"[Decky Translator TTS] Dependencies extracted successfully")
     except Exception as e:
-        print(f"[Decky Translator] Failed to extract dependencies: {e}")
+        print(f"[Decky Translator TTS] Failed to extract dependencies: {e}")
         # Remove marker if it exists, so we retry next time
         if os.path.exists(EXTRACTION_MARKER):
             os.remove(EXTRACTION_MARKER)
@@ -210,7 +210,7 @@ try:
         _plugin_version = json.load(_pkg).get("version", "unknown")
 except Exception as _e:
     _plugin_version = "unknown"
-logger.info(f"Decky Translator v{_plugin_version} starting")
+logger.info(f"Decky Translator TTS v{_plugin_version} starting")
 
 
 import threading

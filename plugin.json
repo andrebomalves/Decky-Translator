@@ -1,11 +1,11 @@
 {
-  "name": "Decky Translator",
-  "author": "cat-in-a-box",
+  "name": "Decky Translator TTS",
+  "author": "cat-in-a-box (fork: andre-bom)",
   "api_version": 1,
   "flags": [],
   "publish": {
     "tags": ["Translation"],
-    "description": "Translate anything on your screen to your language",
-    "image": "https://raw.githubusercontent.com/cat-in-a-box/Decky-Translator/main/assets/store-image.png"
+    "description": "Translate anything on your screen to your language - with TTS voice reading (PT-BR)",
+    "image": "https://raw.githubusercontent.com/andrebomalves/Decky-Translator-TTS/main/assets/store-image.png"
   }
 }
