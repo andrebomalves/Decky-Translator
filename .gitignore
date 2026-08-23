@@ -22,6 +22,10 @@ bower_components
 # Python modules
 py_modules/*
 !py_modules/providers/
+!py_modules/providers/**
+!py_modules/speech/
+!py_modules/speech/**
+
 
 # Editors
 .idea
@@ -75,6 +79,11 @@ dependencies_build/
 out/
 cli/
 
-# Local files
-/docs
+# Local files (keep versioned SDD/ADRs)
+/docs/*
+!/docs/adr
+!/docs/adr/**
+!/docs/decisions.md
+!/docs/validation-log.md
 /nul
+
