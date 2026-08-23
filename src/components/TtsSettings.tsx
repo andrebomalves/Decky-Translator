@@ -13,10 +13,13 @@ import {
 
 import { VFC, useState, useEffect, useCallback } from "react";
 import { call } from "@decky/api";
-import { FaVolumeUp, FaVolumeMute } from "react-icons/fa";
+import { FaVolumeUp, FaVolumeMute, FaDownload } from "react-icons/fa";
+
+export type TtsProvider = 'piper' | 'edge' | 'omnivoice';
+export type OnlineCompat = 'openai' | 'simple';
 
 export interface TtsSettings {
-    tts_provider: 'piper' | 'edge' | 'omnivoice';
+    tts_provider: TtsProvider;
     tts_ptbr_voice: string;
     tts_speed: number;
     tts_volume: number;
@@ -25,7 +28,10 @@ export interface TtsSettings {
     tts_ducking_level: number;
     online_endpoint: string;
     online_api_key: string;
-    online_compat: boolean;
+    online_compat: OnlineCompat;
+    piper_downloaded?: boolean;
+    piper_downloading?: boolean;
+    piper_progress?: number;
 }
 
 const defaultTtsSettings: TtsSettings = {
@@ -34,17 +40,25 @@ const defaultTtsSettings: TtsSettings = {
     tts_speed: 1.0,
     tts_volume: 80,
     tts_auto_read: false,
-    tts_ducking: false,
-    tts_ducking_level: 30,
+    tts_ducking: true,
+    tts_ducking_level: 25,
     online_endpoint: '',
     online_api_key: '',
-    online_compat: true,
+    online_compat: 'openai',
+    piper_downloaded: false,
+    piper_downloading: false,
+    piper_progress: 0,
 };
 
 const providerOptions = [
     { label: 'Piper (offline)', data: 'piper' as const },
     { label: 'Edge TTS (online)', data: 'edge' as const },
     { label: 'OmniVoice (online)', data: 'omnivoice' as const },
+];
+
+const compatOptions = [
+    { label: 'OpenAI API (compat)', data: 'openai' as const },
+    { label: 'Simple API (compat)', data: 'simple' as const },
 ];
 
 const piperVoiceOptions = [
@@ -66,18 +80,21 @@ export const TtsSettings: VFC = () => {
     const loadSettings = useCallback(async () => {
         try {
             const result = await call<[], any>('get_tts_settings');
-            if (result) {
+            if (result && !result.error) {
                 setTtsSettings({
                     tts_provider: result.tts_provider || 'piper',
                     tts_ptbr_voice: result.tts_ptbr_voice || 'pt_BR-faber-medium',
                     tts_speed: result.tts_speed ?? 1.0,
                     tts_volume: result.tts_volume ?? 80,
                     tts_auto_read: result.tts_auto_read ?? false,
-                    tts_ducking: result.tts_ducking ?? false,
-                    tts_ducking_level: result.tts_ducking_level ?? 30,
+                    tts_ducking: result.tts_ducking ?? true,
+                    tts_ducking_level: result.tts_ducking_level ?? 25,
                     online_endpoint: result.online_endpoint || '',
                     online_api_key: result.online_api_key || '',
-                    online_compat: result.online_compat ?? true,
+                    online_compat: result.online_compat === 'simple' ? 'simple' : 'openai',
+                    piper_downloaded: result.piper_downloaded ?? false,
+                    piper_downloading: result.piper_downloading ?? false,
+                    piper_progress: result.piper_progress ?? 0,
                 });
             }
         } catch (error) {
@@ -94,11 +111,15 @@ export const TtsSettings: VFC = () => {
     const updateSetting = useCallback(async (key: keyof TtsSettings, value: any) => {
         setTtsSettings(prev => ({ ...prev, [key]: value }));
         try {
-            await call<[any], boolean>('set_tts_settings', { [key]: value });
+            await call<[Record<string, any>], boolean>('set_tts_settings', { [key]: value });
+            // Refresh to pick up any server-side normalization (e.g. masked key)
+            if (key !== 'online_api_key') {
+                loadSettings();
+            }
         } catch (error) {
             console.error(`[TtsSettings] Failed to set ${key}:`, error);
         }
-    }, []);
+    }, [loadSettings]);
 
     const handleTestVoice = useCallback(async () => {
         if (!testText.trim()) return;
@@ -106,8 +127,10 @@ export const TtsSettings: VFC = () => {
         setTestResult(null);
         try {
             const result = await call<[{ text: string }], any>('test_tts_voice', { text: testText });
-            if (result && result.success) {
-                setTestResult('✓ Teste concluído com sucesso');
+            if (result && result.ok) {
+                setTestResult(result.queued
+                    ? `✓ Voz testada (${result.queued} trecho${result.queued > 1 ? 's' : ''} na fila)`
+                    : '✓ Teste concluído com sucesso');
             } else {
                 setTestResult(`✗ Falha: ${result?.error || 'Erro desconhecido'}`);
             }
@@ -118,6 +141,39 @@ export const TtsSettings: VFC = () => {
             setTimeout(() => setTestResult(null), 3000);
         }
     }, [testText]);
+
+    const handleInstallPiper = useCallback(async () => {
+        try {
+            await call<[], boolean>('download_piper_model');
+            // Poll status while downloading
+            const poll = setInterval(async () => {
+                try {
+                    const st = await call<[], any>('get_piper_model_status');
+                    if (st) {
+                        setTtsSettings(prev => ({
+                            ...prev,
+                            piper_downloading: st.downloading,
+                            piper_progress: st.progress,
+                            piper_downloaded: st.downloaded,
+                        }));
+                    }
+                    if (!st?.downloading && st?.downloaded) {
+                        clearInterval(poll);
+                        loadSettings();
+                    }
+                    if (!st?.downloading && st?.error) {
+                        clearInterval(poll);
+                        setTestResult(`✗ Falha no download: ${st.error}`);
+                        setTimeout(() => setTestResult(null), 5000);
+                    }
+                } catch (e) {
+                    clearInterval(poll);
+                }
+            }, 1500);
+        } catch (error) {
+            console.error('[TtsSettings] Failed to start Piper download:', error);
+        }
+    }, [loadSettings]);
 
     if (loading) {
         return (
@@ -134,6 +190,8 @@ export const TtsSettings: VFC = () => {
         : ttsSettings.tts_provider === 'edge'
             ? edgeVoiceOptions
             : [];
+
+    const showPiperInstall = ttsSettings.tts_provider === 'piper';
 
     return (
         <div>
@@ -173,6 +231,31 @@ export const TtsSettings: VFC = () => {
                         </Focusable>
                     </Field>
                 </PanelSectionRow>
+
+                {/* Piper model install status */}
+                {showPiperInstall && (
+                    <PanelSectionRow>
+                        <Field label="Voz Offline (Piper)">
+                            {ttsSettings.piper_downloading ? (
+                                <div style={{ fontSize: '12px', color: '#ffa726' }}>
+                                    Baixando modelo... {Math.round((ttsSettings.piper_progress || 0) * 100)}%
+                                </div>
+                            ) : ttsSettings.piper_downloaded ? (
+                                <div style={{ fontSize: '12px', color: '#28a745' }}>✔ Instalado</div>
+                            ) : (
+                                <ButtonItem
+                                    layout="below"
+                                    onClick={handleInstallPiper}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <FaDownload style={{ color: '#1a9fff' }} />
+                                        Instalar voz offline (~50MB)
+                                    </div>
+                                </ButtonItem>
+                            )}
+                        </Field>
+                    </PanelSectionRow>
+                )}
 
                 {/* Voice Selection */}
                 <PanelSectionRow>
@@ -303,12 +386,35 @@ export const TtsSettings: VFC = () => {
                         />
                     </PanelSectionRow>
                     <PanelSectionRow>
-                        <ToggleField
-                            checked={ttsSettings.online_compat}
-                            label="Compatibilidade"
-                            description="Modo compatível com APIs OpenAI"
-                            onChange={(value) => updateSetting('online_compat', value)}
-                        />
+                        <Field label="Compatibilidade">
+                            <Focusable style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                {compatOptions.map(opt => (
+                                    <button
+                                        key={opt.data}
+                                        onClick={() => updateSetting('online_compat', opt.data)}
+                                        style={{
+                                            padding: '8px 12px',
+                                            border: ttsSettings.online_compat === opt.data
+                                                ? '2px solid #1a9fff'
+                                                : '1px solid rgba(255,255,255,0.2)',
+                                            borderRadius: '6px',
+                                            background: ttsSettings.online_compat === opt.data
+                                                ? 'rgba(26,159,255,0.2)'
+                                                : 'rgba(255,255,255,0.05)',
+                                            color: ttsSettings.online_compat === opt.data
+                                                ? '#fff'
+                                                : '#aaa',
+                                            cursor: 'pointer',
+                                            fontSize: '12px',
+                                            textAlign: 'left',
+                                            transition: 'all 0.2s',
+                                        }}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </Focusable>
+                        </Field>
                     </PanelSectionRow>
                 </PanelSection>
             )}

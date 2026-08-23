@@ -54,8 +54,13 @@ class EdgeTTSProvider(TTSProvider):
                 "Instale com: pip install edge-tts"
             )
         self._cancel_requested = False
+        # Edge retorna MP3; salvamos com extensão correta para o player escolher ffplay.
+        if wav_path.lower().endswith(".wav"):
+            mp3_path = wav_path[:-4] + ".mp3"
+        else:
+            mp3_path = wav_path + ".mp3"
         try:
-            self._run_synthesize(text, wav_path)
+            self._run_synthesize(text, mp3_path)
         except RuntimeError:
             raise
         except Exception as exc:
@@ -70,12 +75,12 @@ class EdgeTTSProvider(TTSProvider):
 
         if self._cancel_requested:
             try:
-                if os.path.exists(wav_path):
-                    os.remove(wav_path)
+                if os.path.exists(mp3_path):
+                    os.remove(mp3_path)
             except Exception:
                 pass
             raise RuntimeError("Sintese cancelada pelo usuario")
-        return wav_path
+        return mp3_path
 
     # -- internal --
 

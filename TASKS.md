@@ -42,6 +42,8 @@
 - [x] T6.1 Python syntax: 11/11 arquivos `.py` compilan sem erro ✅
 - [x] T6.2 TypeScript build: `npm run build` passa (5.6s) ✅
 - [x] T6.3 Git: 4 commits limpos, push OK ✅
+- [x] T6.8 Revisão contrato RPC frontend/backend — corrigidos get/set_tts_settings, stop_tts, speak_last_translation, online_compat enum, ok vs success, speaking status ✅
+- [x] T6.9 Implementação completa TTS: TTSManager, PiperDownloader, auto_read, interrupção L4, Edge MP3/ffplay, zip gerado ✅
 
 ### Validação pendente (requer Steam Deck real)
 - [ ] T6.4 Funcionais no Deck: painel aparece, offline funciona, Testar voz toca

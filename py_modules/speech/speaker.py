@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import queue
+import shutil
 import subprocess
 import threading
 import time
@@ -38,12 +39,13 @@ class SpeakJob:
 
 def _find_audio_player() -> Optional[str]:
     """Encontra o melhor player de áudio disponível."""
-    for cmd in ("pw-play", "paplay", "aplay", "ffplay -nodisp -autoexit"):
-        binary = cmd.split()[0]
-        if subprocess.run(
-            ["which", binary], capture_output=True
-        ).returncode == 0:
+    # Preferência: pw-play é nativo do PipeWire/SteamOS.
+    for cmd in ("pw-play", "paplay", "aplay"):
+        if shutil.which(cmd):
             return cmd
+    # ffplay é fallback para formatos como MP3.
+    if shutil.which("ffplay"):
+        return "ffplay -nodisp -autoexit -loglevel quiet"
     return None
 
 
@@ -239,7 +241,7 @@ class Speaker:
                     logger.warning(f"Speaker: restore volume falhou: {exc}")
 
     def _play_wav(self, wav_path: str) -> None:
-        """Reproduz arquivo WAV usando o player disponível."""
+        """Reproduz arquivo de áudio usando o player disponível."""
         if not self._player_cmd:
             logger.warning("Speaker: nenhum player disponível, ignorando reprodução")
             return
@@ -248,7 +250,17 @@ class Speaker:
             logger.warning(f"Speaker: arquivo não encontrado: {wav_path}")
             return
 
-        cmd_parts = self._player_cmd.split()
+        # Se for MP3 e não tivermos ffplay, não conseguimos tocar
+        is_mp3 = wav_path.lower().endswith(".mp3")
+        player_cmd = self._player_cmd
+        if is_mp3 and not player_cmd.startswith("ffplay"):
+            if shutil.which("ffplay"):
+                player_cmd = "ffplay -nodisp -autoexit -loglevel quiet"
+            else:
+                logger.warning("Speaker: MP3 requer ffplay, mas não está disponível")
+                return
+
+        cmd_parts = player_cmd.split()
         cmd = cmd_parts + [wav_path]
 
         try:

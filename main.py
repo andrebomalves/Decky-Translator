@@ -17,6 +17,7 @@ import tarfile
 import shutil
 import glob
 from urllib.parse import urlparse, unquote
+from typing import Any
 
 # IMPORTANT: Set up plugin directory FIRST
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -92,6 +93,7 @@ import requests
 # Import provider system
 from providers import ProviderManager, TextRegion, NetworkError, ApiKeyError, RateLimitError
 from providers.translation_cache import TranslationCache, PROVIDER_TIERS, normalize
+from speech.manager import TTSManager
 
 _processing_lock = False
 
@@ -1206,6 +1208,7 @@ class Plugin:
     _online_endpoint: str = ""
     _online_api_key: str = ""
     _online_compat: str = "openai"
+    _tts_manager: Any = None
 
     _has_pngenc = None
     _fallback_dims = None
@@ -1555,7 +1558,14 @@ class Plugin:
             else:
                 logger.warning(f"Unknown setting key: {key}")
 
-            return self._settings.set_setting(key, value)
+            result = self._settings.set_setting(key, value)
+            # Keep TTSManager in sync when TTS keys change via legacy path
+            if result and self._tts_manager is not None and (key.startswith("tts_") or key.startswith("online_")):
+                try:
+                    self._tts_manager.load_settings()
+                except Exception as e:
+                    logger.error(f"Failed to sync TTSManager after '{key}': {e}")
+            return result
         except Exception as e:
             logger.error(f"Error setting {key}: {str(e)}")
             logger.error(traceback.format_exc())
@@ -1605,7 +1615,7 @@ class Plugin:
                 "tts_ducking": self._settings.get_setting("tts_ducking", True),
                 "tts_ducking_level": self._settings.get_setting("tts_ducking_level", 25),
                 "online_endpoint": self._settings.get_setting("online_endpoint", ""),
-                "online_api_key": self._settings.get_setting("online_api_key", ""),
+                "online_api_key": _mask_secret(str(self._settings.get_setting("online_api_key", ""))) if self._settings.get_setting("online_api_key", "") else "",
                 "online_compat": self._settings.get_setting("online_compat", "openai"),
             }
             return settings
@@ -2400,6 +2410,26 @@ class Plugin:
                     })
 
             logger.debug(f"Returning {len(translated_regions)} translated regions (from {len(text_regions)} input regions)")
+
+            # TTS integration (SDD TTS-001): store last translation and speak if auto_read
+            try:
+                if self._tts_manager is not None:
+                    original_text = " ".join(
+                        r.get("text", "") for r in translated_regions if r.get("text")
+                    )
+                    translated_text = " ".join(
+                        r.get("translatedText", "") for r in translated_regions if r.get("translatedText")
+                    )
+                    self._tts_manager.set_last_text(original_text, translated_text)
+                    if self._tts_auto_read:
+                        # Fire-and-forget: don't block the translation response on speech
+                        asyncio.get_event_loop().call_soon_threadsafe(
+                            asyncio.get_event_loop().create_task,
+                            self.speak_last_translation(),
+                        )
+            except Exception as tts_e:
+                logger.error(f"TTS auto-read integration failed: {tts_e}")
+
             return translated_regions
 
         except NetworkError as e:
@@ -2763,10 +2793,9 @@ class Plugin:
                     return {"ok": False, "error": "Endpoint vazio. Configure a URL do provedor online."}
                 if provider == "omnivoice" and not has_key:
                     return {"ok": False, "error": "API Key vazia. Configure a chave do provedor online."}
-                # edge/omnivoice ainda sem implementacao real: retorna ok simulado
-                return {"ok": True, "provider": provider, "simulated": True, "text": preview}
-            # piper offline - stub ok (F2 vai implementar piper_provider)
-            return {"ok": True, "provider": provider, "simulated": True, "text": preview}
+            if self._tts_manager is None:
+                return {"ok": False, "error": "TTS manager não inicializado"}
+            return self._tts_manager.test_voice(preview)
         except Exception as e:
             logger.error(f"test_tts_voice failed: {e}")
             logger.error(traceback.format_exc())
@@ -2774,21 +2803,94 @@ class Plugin:
 
     async def get_tts_status(self):
         try:
-            return {
-                "provider": getattr(self, "_tts_provider", "piper"),
-                "voice": getattr(self, "_tts_ptbr_voice", "pt_BR-faber-medium"),
-                "speed": getattr(self, "_tts_speed", 1.0),
-                "volume": getattr(self, "_tts_volume", 80),
-                "auto_read": getattr(self, "_tts_auto_read", False),
-                "ducking": getattr(self, "_tts_ducking", True),
-                "ducking_level": getattr(self, "_tts_ducking_level", 25),
-                "endpoint_configured": bool(getattr(self, "_online_endpoint", "")),
-                "has_api_key": bool(getattr(self, "_online_api_key", "")),
-                "compat": getattr(self, "_online_compat", "openai"),
-            }
+            if self._tts_manager is None:
+                return {"error": "TTS manager não inicializado"}
+            return self._tts_manager.get_status()
         except Exception as e:
             logger.error(f"get_tts_status failed: {e}")
             return {"error": str(e)}
+
+    async def get_tts_settings(self):
+        try:
+            if self._tts_manager is None:
+                return {"error": "TTS manager não inicializado"}
+            return self._tts_manager.get_settings()
+        except Exception as e:
+            logger.error(f"get_tts_settings failed: {e}")
+            return {"error": str(e)}
+
+    async def set_tts_settings(self, settings: dict):
+        try:
+            if self._tts_manager is None:
+                return False
+            ok = self._tts_manager.set_settings(settings)
+            if ok:
+                # Keep Plugin attributes in sync so legacy get/set paths stay consistent
+                st = self._tts_manager.get_settings()
+                self._tts_provider = st["tts_provider"]
+                self._tts_ptbr_voice = st["tts_ptbr_voice"]
+                self._tts_speed = st["tts_speed"]
+                self._tts_volume = st["tts_volume"]
+                self._tts_auto_read = st["tts_auto_read"]
+                self._tts_ducking = st["tts_ducking"]
+                self._tts_ducking_level = st["tts_ducking_level"]
+                self._online_endpoint = st["online_endpoint"]
+                self._online_api_key = self._settings.get_setting("online_api_key", "") or ""
+                self._online_compat = st["online_compat"]
+            return ok
+        except Exception as e:
+            logger.error(f"set_tts_settings failed: {e}")
+            logger.error(traceback.format_exc())
+            return False
+
+    async def speak_last_translation(self):
+        try:
+            if self._tts_manager is None:
+                return {"ok": False, "error": "TTS manager não inicializado"}
+            return self._tts_manager.speak_last_translation()
+        except Exception as e:
+            logger.error(f"speak_last_translation failed: {e}")
+            logger.error(traceback.format_exc())
+            return {"ok": False, "error": str(e)}
+
+    async def stop_tts(self):
+        try:
+            if self._tts_manager is None:
+                return {"ok": False, "error": "TTS manager não inicializado"}
+            return self._tts_manager.stop()
+        except Exception as e:
+            logger.error(f"stop_tts failed: {e}")
+            logger.error(traceback.format_exc())
+            return {"ok": False, "error": str(e)}
+
+    async def get_piper_model_status(self):
+        try:
+            if self._tts_manager is None:
+                return {"downloaded": False, "downloading": False, "progress": 0, "error": "TTS manager não inicializado"}
+            return self._tts_manager.get_piper_status()
+        except Exception as e:
+            logger.error(f"get_piper_model_status failed: {e}")
+            return {"downloaded": False, "downloading": False, "progress": 0, "error": str(e)}
+
+    async def download_piper_model(self):
+        try:
+            if self._tts_manager is None:
+                return False
+            return self._tts_manager.download_piper_model()
+        except Exception as e:
+            logger.error(f"download_piper_model failed: {e}")
+            logger.error(traceback.format_exc())
+            return False
+
+    async def cancel_piper_model_download(self):
+        try:
+            if self._tts_manager is None:
+                return False
+            return self._tts_manager.cancel_piper_download()
+        except Exception as e:
+            logger.error(f"cancel_piper_model_download failed: {e}")
+            logger.error(traceback.format_exc())
+            return False
 
     async def _main(self):
         logger.info("Plugin initialization started")
@@ -2828,7 +2930,7 @@ class Plugin:
             self._tts_auto_read = bool(load_setting("tts_auto_read", self._tts_auto_read))
             self._tts_ducking = bool(load_setting("tts_ducking", self._tts_ducking))
             self._tts_ducking_level = int(load_setting("tts_ducking_level", self._tts_ducking_level))
-            self._online_endpoint = load_api_key("online_endpoint") if False else load_setting("online_endpoint", self._online_endpoint)
+            self._online_endpoint = load_setting("online_endpoint", self._online_endpoint)
             # online_api_key needs masking like other api keys
             _raw_online_key = self._settings.get_setting("online_api_key", "")
             _cleaned_online = _clean_api_key(_raw_online_key) if isinstance(_raw_online_key, str) else _raw_online_key
@@ -2970,6 +3072,11 @@ class Plugin:
                         f"Translation: {provider_status.get('translation_provider', '?')}, "
                         f"Target lang: {self._target_language}")
 
+            # Initialize TTS manager (SDD TTS-001) - after settings are loaded so it can read them
+            self._tts_manager = TTSManager(self, self._settings)
+            self._tts_manager.load_settings()
+            logger.info(f"TTS initialized - provider: {self._tts_manager.get_status().get('provider')}")
+
             # Start hidraw button monitor
             self._hidraw_monitor = HidrawButtonMonitor()
             if self._hidraw_monitor.start():
@@ -3001,6 +3108,10 @@ class Plugin:
     async def _unload(self):
         logger.info("Unloading plugin")
         try:
+            if self._tts_manager:
+                self._tts_manager.shutdown()
+                self._tts_manager = None
+
             if self._provider_manager:
                 self._provider_manager.shutdown()
 

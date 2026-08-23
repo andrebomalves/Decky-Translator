@@ -70,11 +70,19 @@ export class GameTranslatorLogic {
                 if (this.isProcessing) return;
                 if (!this.canStartTranslation()) return;
 
-                // Pause first so the game freezes before the screenshot
-                if (this.pauseGameOnOverlay) {
-                    this.pauseCurrentGame().catch(err => logger.error('Translator', 'Pause failed', err));
-                }
-                this.takeScreenshotAndTranslate().catch(err => logger.error('Translator', 'Screenshot failed', err));
+                // SDD TTS-001: segundo L4 durante fala interrompe em vez de traduzir
+                this.interruptTtsIfSpeaking().then(interrupted => {
+                    if (interrupted) return;
+
+                    // Pause first so the game freezes before the screenshot
+                    if (this.pauseGameOnOverlay) {
+                        this.pauseCurrentGame().catch(err => logger.error('Translator', 'Pause failed', err));
+                    }
+                    this.takeScreenshotAndTranslate().catch(err => logger.error('Translator', 'Screenshot failed', err));
+                }).catch(err => {
+                    logger.error('Translator', 'TTS interrupt check failed', err);
+                    this.takeScreenshotAndTranslate().catch(err2 => logger.error('Translator', 'Screenshot failed', err2));
+                });
             }
         });
 
@@ -301,6 +309,44 @@ export class GameTranslatorLogic {
             duration: duration,
             critical: true
         });
+    }
+
+    // SDD TTS-001: check if TTS is speaking; if so, stop it and return true
+    private async interruptTtsIfSpeaking(): Promise<boolean> {
+        try {
+            const status = await call<[], any>('get_tts_status');
+            if (status && status.speaking) {
+                logger.info('Translator', 'TTS speaking, interrupting on L4 press');
+                await call<[], any>('stop_tts');
+                this.notify('Fala interrompida', 1000);
+                return true;
+            }
+        } catch (error) {
+            logger.error('Translator', 'Failed to check TTS status', error);
+        }
+        return false;
+    }
+
+    // Speak the last translation (used by VoiceControls)
+    speakLastTranslation = async (): Promise<boolean> => {
+        try {
+            const result = await call<[], any>('speak_last_translation');
+            return !!(result && result.ok);
+        } catch (error) {
+            logger.error('Translator', 'Failed to speak last translation', error);
+            return false;
+        }
+    }
+
+    // Stop TTS (used by VoiceControls)
+    stopTts = async (): Promise<boolean> => {
+        try {
+            const result = await call<[], any>('stop_tts');
+            return !!(result && result.ok);
+        } catch (error) {
+            logger.error('Translator', 'Failed to stop TTS', error);
+            return false;
+        }
     }
 
     dismiss = (): void => {

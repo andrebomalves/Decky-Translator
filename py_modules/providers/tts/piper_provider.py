@@ -8,8 +8,6 @@ import subprocess
 import wave
 from typing import Optional
 
-import numpy as np
-
 from .base import TTSProvider
 
 logger = logging.getLogger(__name__)
@@ -175,6 +173,12 @@ class PiperTTSProvider(TTSProvider):
                 "Nem piper CLI nem onnxruntime disponíveis. "
                 "Instale: pip install piper-tts ou pip install onnxruntime"
             )
+        try:
+            import numpy as np
+        except ImportError:
+            raise RuntimeError(
+                "numpy não disponível. Instale: pip install numpy"
+            )
 
         sess = ort.InferenceSession(self._model_path or "")
         input_names = [i.name for i in sess.get_inputs()]
@@ -258,8 +262,12 @@ class PiperTTSProvider(TTSProvider):
 
     # ── WAV output ────────────────────────────────────────────────────
 
-    def _write_wav(self, audio: np.ndarray, wav_path: str) -> None:
+    def _write_wav(self, audio, wav_path: str) -> None:
         """Escreve array de áudio float32 como WAV 22050Hz mono."""
+        try:
+            import numpy as np
+        except ImportError:
+            raise RuntimeError("numpy não disponível. Instale: pip install numpy")
         if audio.dtype != np.float32:
             audio = audio.astype(np.float32)
         peak = np.max(np.abs(audio)) if len(audio) > 0 else 1.0
